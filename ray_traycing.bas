@@ -1,4 +1,6 @@
-CONST MATH_INF = 10000
+CONST MATH_INF# = 10000000
+
+CONST COLOR_WHITE~& = _RGB32(255, 255, 255)
 
 
 TYPE CanvasConfigType
@@ -26,9 +28,9 @@ END TYPE
 
 
 TYPE ViewportConfigType
-    width AS INTEGER
-    height AS INTEGER
-    distance AS INTEGER
+    width AS DOUBLE
+    height AS DOUBLE
+    distance AS DOUBLE
     origin AS ViewportPointType
 END TYPE
 
@@ -37,6 +39,7 @@ TYPE SphereType
     center AS ViewportPointType
     radius AS DOUBLE
     color AS _UNSIGNED LONG
+    specular AS DOUBLE
 END TYPE
 
 
@@ -46,37 +49,87 @@ TYPE SphereIntersectionType
 END TYPE
 
 
-DIM sphere1 AS SphereType
-DIM sphere2 AS SphereType
-DIM sphere3 AS SphereType
+TYPE LightType
+    source AS STRING 'Ambient, Directional, Point
+    intensity AS DOUBLE
+    position AS ViewportPointType
+    direction AS ViewportPointType
+END TYPE
+
+
 DIM center AS ViewportPointType
-DIM spheres(1 TO 3) AS SphereType
+DIM spheres(1 TO 4) AS SphereType
 'Sphere 1
 center.x = 0
 center.y = -1
 center.z = 3
+DIM sphere1 AS SphereType
 sphere1.center = center
 sphere1.radius = 1
-sphere1.color = _RGB32(128, 0, 128)
+sphere1.color = _RGB32(&H8B, &H5C, &HF6)
+sphere1.specular = 50
 spheres(1) = sphere1
 
 'Sphere 2
 center.x = 2
 center.y = 0
 center.z = 4
+DIM sphere2 AS SphereType
 sphere2.center = center
 sphere2.radius = 1
-sphere2.color = _RGB32(128, 128, 0)
+sphere2.color = _RGB32(&HEC, &H48, &H99)
+sphere2.specular = 500
 spheres(2) = sphere2
 
 'Sphere 3
 center.x = -2
 center.y = 0
 center.z = 4
+DIM sphere3 AS SphereType
 sphere3.center = center
 sphere3.radius = 1
-sphere3.color = _RGB32(0, 128, 128)
+sphere3.color = _RGB32(&H10, &HB9, &H81)
+sphere3.specular = 5
 spheres(3) = sphere3
+
+'Sphere 4
+center.x = 0
+center.y = -5001
+center.z = 0
+DIM sphere4 AS SphereType
+sphere4.center = center
+sphere4.radius = 5000
+sphere4.color = _RGB32(&H60, &HA5, &HFA)
+sphere4.specular = 1000
+spheres(4) = sphere4
+
+
+DIM lights(1 TO 3) AS LightType
+
+DIM ambientLight AS LightType
+ambientLight.source = "Ambient"
+ambientLight.intensity = 0.15
+lights(1) = ambientLight
+
+DIM pointLight AS LightType
+pointLight.source = "Point"
+pointLight.intensity = 0.5
+DIM lightPosition AS ViewportPointType
+lightPosition.x = 2
+lightPosition.y = 1
+lightPosition.z = 0
+pointLight.position = lightPosition
+lights(2) = pointLight
+
+DIM directionalLight AS LightType
+directionalLight.source = "Directional"
+directionalLight.intensity = 0.2
+DIM lightDirection AS ViewportPointType
+lightDirection.x = 1 '-3
+lightDirection.y = 4 '1
+lightDirection.z = 4 '-3
+directionalLight.direction = lightDirection
+lights(3) = directionalLight
 
 
 DIM canvasConfig AS CanvasConfigType
@@ -91,25 +144,93 @@ cameraOrigin.x = 0
 cameraOrigin.y = 0
 cameraOrigin.z = 0
 DIM viewportConfig AS ViewportConfigType
-viewportConfig.width = 1
+viewportConfig.width = 1.4
 viewportConfig.height = 1
-viewportConfig.distance = 1
+viewportConfig.distance = 0.75
 viewportConfig.origin = cameraOrigin
 
 
-CALL Main(spheres(), canvasConfig, viewportConfig)
+CALL Main(spheres(), lights(), canvasConfig, viewportConfig)
 
-SUB Main (spheres() AS SphereType, canvasConfig AS CanvasConfigType, viewportConfig AS ViewportConfigType)
+SUB Main (spheres() AS SphereType, lights() AS LightType, canvasConfig AS CanvasConfigType, viewportConfig AS ViewportConfigType)
+    testResults = RunTests
+    IF testResults <> 0 THEN
+        PRINT "Main - red tests, aborting."
+        PRINT
+        PRINT "Press any key to exit."
+        DO
+        LOOP UNTIL INKEY$ <> ""
+        SYSTEM
+    END IF
+
     CALL InitCanvas(canvasConfig)
-    CALL Render(spheres(), canvasConfig, viewportConfig)
+
+    DIM pressedKey AS STRING
+    DIM change AS INTEGER
+    change = 1
+    DIM dimension AS STRING
+    dimension = "x"
+    DO
+        IF change <> 0 THEN
+            CLS
+            CALL Render(spheres(), lights(), canvasConfig, viewportConfig)
+            change = 0
+        END IF
+
+        pressedKey = ""
+        pressedKey = INKEY$
+
+        IF RIGHT$(pressedKey, 1) = "K" THEN 'Left arrow pressed
+            IF dimension = "x" THEN
+                viewportConfig.origin.x = viewportConfig.origin.x + 1
+            ELSEIF dimension = "y" THEN
+                viewportConfig.origin.y = viewportConfig.origin.y + 1
+            ELSEIF dimension = "z" THEN
+                viewportConfig.origin.z = viewportConfig.origin.z + 1
+            END IF
+            change = change + 1
+        ELSEIF RIGHT$(pressedKey, 1) = "M" THEN 'Right arrow pressed
+            IF dimension = "x" THEN
+                viewportConfig.origin.x = viewportConfig.origin.x - 1
+            ELSEIF dimension = "y" THEN
+                viewportConfig.origin.y = viewportConfig.origin.y - 1
+            ELSEIF dimension = "z" THEN
+                viewportConfig.origin.z = viewportConfig.origin.z - 1
+            END IF
+            change = change + 1
+        ELSEIF RIGHT$(pressedKey, 1) = "H" THEN 'Up arrow pressed
+            viewportConfig.distance = viewportConfig.distance + 0.125
+            change = change + 1
+        ELSEIF RIGHT$(pressedKey, 1) = "P" THEN 'Down arrow pressed
+            viewportConfig.distance = viewportConfig.distance - 0.125
+            change = change + 1
+        ELSEIF pressedKey = "x" THEN
+            dimension = "x"
+        ELSEIF pressedKey = "y" THEN
+            dimension = "y"
+        ELSEIF pressedKey = "z" THEN
+            dimension = "z"
+        END IF
+    LOOP UNTIL pressedKey = CHR$(27) OR pressedKey = "q" 'ESC
+    SYSTEM
 END SUB
+
+FUNCTION RunTests ()
+    result = TestAdjustLightIntensity
+    IF result <> 0 THEN
+        RunTests = result
+        EXIT FUNCTION
+    END IF
+
+    RunTests = 0
+END FUNCTION
 
 SUB InitCanvas (config AS CanvasConfigType)
     CLS
     SCREEN _NEWIMAGE(config.width, config.height, config.numColors)
 END SUB
 
-SUB Render (spheres() AS SphereType, canvasConfig AS CanvasConfigType, viewportConfig AS ViewportConfigType)
+SUB Render (spheres() AS SphereType, lights() AS LightType, canvasConfig AS CanvasConfigType, viewportConfig AS ViewportConfigType)
     DIM cameraOrigin AS ViewportPointType
     cameraOrigin = viewportConfig.origin
 
@@ -121,16 +242,7 @@ SUB Render (spheres() AS SphereType, canvasConfig AS CanvasConfigType, viewportC
         FOR y = -canvasConfig.halfHeight TO canvasConfig.halfHeight
             position.y = y
             CALL CanvasToViewPort(position, rayDirection, canvasConfig, viewportConfig)
-            pixelColor = TraceRay~&(spheres(), cameraOrigin, rayDirection, 1, MATH_INF)
-
-            'IF pixelColor <> 4278190080 THEN
-            '    CLS
-            '    PRINT x
-            '    PRINT y
-            '    PRINT pixelColor
-            '    DO
-            '    LOOP UNTIL INKEY$ <> ""
-            'END IF
+            pixelColor = TraceRay~&(spheres(), lights(), cameraOrigin, rayDirection, 1, MATH_INF#)
             CALL DrawPixel(position, pixelColor, canvasConfig)
         NEXT y
     NEXT x
@@ -142,35 +254,48 @@ SUB CanvasToViewPort (from2d AS CanvasPointType, to3d AS ViewportPointType, canv
     to3d.z = viewportConfig.distance
 END SUB
 
-FUNCTION TraceRay~& (spheres() AS SphereType, origin AS ViewportPointType, rayDirection AS ViewportPointType, tMin AS INTEGER, tMax AS INTEGER)
+FUNCTION TraceRay~& (spheres() AS SphereType, lights() AS LightType, origin AS ViewportPointType, rayDirection AS ViewportPointType, tMin AS DOUBLE, tMax AS DOUBLE)
     DIM closestT AS DOUBLE
-    closestT = MATH_INF
+    closestT = MATH_INF#
+
     DIM sphere AS SphereType
+
     DIM closestSphere AS SphereType
     closestSphere.radius = -1
+
     DIM sphereIntersection AS SphereIntersectionType
     DIM t1 AS DOUBLE
     DIM t2 AS DOUBLE
 
-    FOR i = 1 TO 3
+    DIM P AS ViewportPointType
+    DIM normalVector AS ViewportPointType
+    DIM V AS ViewportPointType
+
+    FOR i = 1 TO UBOUND(spheres)
         sphere = spheres(i)
         CALL IntersectRaySphere(origin, rayDirection, sphere, sphereIntersection)
         t1 = sphereIntersection.t1
         t2 = sphereIntersection.t2
-        IF t1 >= tMin AND t1 <= tMax AND t1 < closestT THEN
+        IF t1 < closestT AND t1 >= tMin AND t1 <= tMax THEN
             closestT = t1
             closestSphere = sphere
         END IF
-        IF t2 >= tMin AND t2 <= tMax AND t2 < closestT THEN
+        IF t2 < closestT AND t2 >= tMin AND t2 <= tMax THEN
             closestT = t2
             closestSphere = sphere
         END IF
     NEXT i
 
     IF closestSphere.radius = -1 THEN
-        TraceRay~& = _RGB32(0, 0, 0)
+        TraceRay~& = COLOR_WHITE~&
     ELSE
-        TraceRay~& = closestSphere.color
+        CALL ScalarMult3d(rayDirection, closestT, P)
+        CALL Add3d(P, origin, P)
+        CALL Difference3d(closestSphere.center, P, normalVector)
+        CALL ScalarMult3d(normalVector, 1 / Length3d#(normalVector), normalVector)
+        CALL ScalarMult3d(rayDirection, -1, V)
+        lightIntensity# = ComputeLighting!(P, normalVector, V, lights(), closestSphere.specular)
+        TraceRay~& = AdjustLightIntensity~&(closestSphere.color, lightIntensity#)
     END IF
 END FUNCTION
 
@@ -179,19 +304,73 @@ SUB IntersectRaySphere (origin AS ViewportPointType, rayDirection AS ViewportPoi
     DIM CO AS ViewportPointType
     CALL Difference3d(sphere.center, origin, CO)
     DIM a, b, c, discriminant AS DOUBLE
-    a = DotProduct3d(rayDirection, rayDirection)
-    b = 2 * DotProduct3d(CO, rayDirection)
-    c = DotProduct3d(CO, CO) - r * r
+    a = DotProduct3d#(rayDirection, rayDirection)
+    b = 2 * DotProduct3d#(CO, rayDirection)
+    c = DotProduct3d#(CO, CO) - r * r
 
     discriminant = b * b - 4 * a * c
     IF discriminant < 0 THEN
         'Set intersections to infinity
-        sphereIntersection.t1 = MATH_INF
-        sphereIntersection.t2 = MATH_INF
+        sphereIntersection.t1 = MATH_INF#
+        sphereIntersection.t2 = MATH_INF#
     ELSE
         sphereIntersection.t1 = (-b + SQR(discriminant)) / (2 * a)
         sphereIntersection.t2 = (-b - SQR(discriminant)) / (2 * a)
     END IF
+END SUB
+
+FUNCTION ComputeLighting! (pt AS ViewportPointType, normalVector AS ViewportPointType, V AS ViewportPointType, lights() AS LightType, specular AS DOUBLE)
+    DIM intensity AS SINGLE
+    intensity = 0.0
+
+    lenNormalVector# = Length3d#(normalVector)
+
+    DIM L AS ViewportPointType
+    DIM R AS ViewportPointType
+
+    DIM light AS LightType
+    FOR i = 1 TO UBOUND(lights)
+        light = lights(i)
+        IF light.source = "Ambient" THEN
+            intensity = intensity + light.intensity
+        ELSE
+            IF light.source = "Point" THEN
+                CALL Difference3d(pt, light.position, L)
+            ELSE
+                'light.source = "Directional"
+                L = light.direction
+            END IF
+
+            'Diffuse
+            dot# = DotProduct3d#(normalVector, L)
+            IF dot# > 0 THEN
+                intensity = intensity + light.intensity * dot# / (lenNormalVector# * Length3d#(L))
+            END IF
+
+            'Specular
+            IF specular >= 0 THEN
+                CALL ScalarMult3d(normalVector, 2 * DotProduct3d#(normalVector, L), R)
+                CALL Difference3d(L, R, R)
+                rDotV# = DotProduct3d#(R, V)
+                IF rDotV# > 0 THEN
+                    intensity = intensity + light.intensity * (rDotV# / (Length3d#(R) * Length3d#(V))) ^ specular
+                END IF
+            END IF
+        END IF
+    NEXT i
+    ComputeLighting! = intensity
+END FUNCTION
+
+SUB Add3d (vector AS ViewportPointType, pt AS ViewportPointType, resultVector AS ViewportPointType)
+    resultVector.x = vector.x + pt.x
+    resultVector.y = vector.y + pt.y
+    resultVector.z = vector.z + pt.z
+END SUB
+
+SUB ScalarMult3d (vector AS ViewportPointType, scalar AS DOUBLE, resultVector AS ViewportPointType)
+    resultVector.x = vector.x * scalar
+    resultVector.y = vector.y * scalar
+    resultVector.z = vector.z * scalar
 END SUB
 
 SUB Difference3d (position1 AS ViewportPointType, position2 AS ViewportPointType, resultingVector AS ViewportPointType)
@@ -200,11 +379,84 @@ SUB Difference3d (position1 AS ViewportPointType, position2 AS ViewportPointType
     resultingVector.z = position2.z - position1.z
 END SUB
 
-FUNCTION DotProduct3d (vector1 AS ViewportPointType, vector2 AS ViewportPointType)
-    DotProduct3d = vector1.x * vector2.x + vector1.y * vector2.y + vector1.z * vector2.z
+FUNCTION Length3d# (vector AS ViewportPointType)
+    Length3d# = SQR(DotProduct3d#(vector, vector))
+END FUNCTION
+
+FUNCTION DotProduct3d# (vector1 AS ViewportPointType, vector2 AS ViewportPointType)
+    DotProduct3d# = vector1.x * vector2.x + vector1.y * vector2.y + vector1.z * vector2.z
+END FUNCTION
+
+FUNCTION TestAdjustLightIntensity ()
+    givenColor~& = COLOR_WHITE~&
+    givenIntensity = 0.1
+
+    actualColor~& = AdjustLightIntensity~&(givenColor~&, givenIntensity)
+
+    actualRed% = _RED32(actualColor~&)
+    expectedRed = 25
+    IF actualRed% <> expectedRed THEN
+        PRINT "TestAdjustLightIntensity - Red was"; actualRed%; "instead of"; expectedRed
+        TestAdjustLightIntensity = -1
+        EXIT FUNCTION
+    END IF
+
+    actualGreen% = _GREEN32(actualColor~&)
+    expectedGreen = 25
+    IF actualGreen% <> expectedGreen THEN
+        PRINT "TestAdjustLightIntensity - Green was"; actualGreen%; "instead of"; expectedGreen
+        TestAdjustLightIntensity = -1
+        EXIT FUNCTION
+    END IF
+
+    actualBlue% = _BLUE32(actualColor~&)
+    expectedBlue = 25
+    IF actualBlue% <> expectedBlue THEN
+        PRINT "TestAdjustLightIntensity - Blue was"; actualBlue%; "instead of"; expectedBlue
+        TestAdjustLightIntensity = -1
+        EXIT FUNCTION
+    END IF
+
+    TestAdjustLightIntensity = 0
+END FUNCTION
+
+FUNCTION AdjustLightIntensity~& (clr AS _UNSIGNED LONG, intensity AS DOUBLE)
+    red = _RED32(clr)
+    green = _GREEN32(clr)
+    blue = _BLUE32(clr)
+
+    intensity = Max#(intensity, 0)
+
+    red = INT(Min#(red * intensity, 255))
+    green = INT(Min#(green * intensity, 255))
+    blue = INT(Min#(blue * intensity, 255))
+
+    AdjustLightIntensity~& = _RGB32(red, green, blue)
 END FUNCTION
 
 SUB DrawPixel (position AS CanvasPointType, fgColor AS _UNSIGNED LONG, config AS CanvasConfigType)
-    PSET (config.halfWidth + position.x, config.halfHeight - position.y), fgColor
+    x = config.halfWidth + position.x
+    y = config.halfHeight - position.y - 1
+    IF x < 0 OR x > config.width OR y < 0 OR y > config.height THEN
+        EXIT SUB
+    END IF
+
+    PSET (x, y), fgColor
 END SUB
+
+FUNCTION Max# (d1 AS DOUBLE, d2 AS DOUBLE)
+    IF d1 >= d2 THEN
+        Max# = d1
+    ELSE
+        Max# = d2
+    END IF
+END FUNCTION
+
+FUNCTION Min# (d1 AS DOUBLE, d2 AS DOUBLE)
+    IF d1 <= d2 THEN
+        Min# = d1
+    ELSE
+        Min# = d2
+    END IF
+END FUNCTION
 
