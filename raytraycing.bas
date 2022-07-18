@@ -1,6 +1,6 @@
 CONST MATH_INF# = 10000000
 
-CONST COLOR_WHITE~& = _RGB32(32, 32, 32)
+CONST COLOR_WHITE~& = _RGB32(16, 16, 16)
 
 
 TYPE CanvasConfigType
@@ -27,11 +27,30 @@ TYPE ViewportPointType
 END TYPE
 
 
+TYPE RotationMatrixType
+    x1 AS DOUBLE
+    x2 AS DOUBLE
+    x3 AS DOUBLE
+    y1 AS DOUBLE
+    y2 AS DOUBLE
+    y3 AS DOUBLE
+    z1 AS DOUBLE
+    z2 AS DOUBLE
+    z3 AS DOUBLE
+END TYPE
+
+
+TYPE CameraType
+    position AS ViewportPointType
+    rotation AS RotationMatrixType
+END TYPE
+
+
 TYPE ViewportConfigType
     width AS DOUBLE
     height AS DOUBLE
     distance AS DOUBLE
-    origin AS ViewportPointType
+    camera AS CameraType
 END TYPE
 
 
@@ -119,12 +138,12 @@ DIM lights(1 TO 3) AS LightType
 
 DIM ambientLight AS LightType
 ambientLight.source = "Ambient"
-ambientLight.intensity = 0.15
+ambientLight.intensity = 0.2
 lights(1) = ambientLight
 
 DIM pointLight AS LightType
 pointLight.source = "Point"
-pointLight.intensity = 0.5
+pointLight.intensity = 0.6
 DIM lightPosition AS ViewportPointType
 lightPosition.x = 2
 lightPosition.y = 1
@@ -150,15 +169,41 @@ canvasConfig.height = 600
 canvasConfig.halfWidth = canvasConfig.width \ 2
 canvasConfig.halfHeight = canvasConfig.height \ 2
 
-DIM cameraOrigin AS ViewportPointType
-cameraOrigin.x = 0
-cameraOrigin.y = 0
-cameraOrigin.z = 0
+DIM camera AS CameraType
+DIM cameraPosition AS ViewportPointType
+cameraPosition.x = 3
+cameraPosition.y = 0
+cameraPosition.z = 1
+camera.position = cameraPosition
+DIM rotation AS RotationMatrixType
+rotation.x1 = 0.7071
+rotation.x2 = 0
+rotation.x3 = -0.7071
+rotation.y1 = 0
+rotation.y2 = 1
+rotation.y3 = 0
+rotation.z1 = 0.7071
+rotation.z2 = 0
+rotation.z3 = 0.7071
+
+''No rotation
+'rotation.x1 = 1
+'rotation.x2 = 0
+'rotation.x3 = 0
+'rotation.y1 = 0
+'rotation.y2 = 1
+'rotation.y3 = 0
+'rotation.z1 = 0
+'rotation.z2 = 0
+'rotation.z3 = 1
+
+camera.rotation = rotation
+
 DIM viewportConfig AS ViewportConfigType
 viewportConfig.width = 1.4
 viewportConfig.height = 1
 viewportConfig.distance = 0.75
-viewportConfig.origin = cameraOrigin
+viewportConfig.camera = camera
 
 
 CALL Main(spheres(), lights(), canvasConfig, viewportConfig)
@@ -193,20 +238,20 @@ SUB Main (spheres() AS SphereType, lights() AS LightType, canvasConfig AS Canvas
 
         IF RIGHT$(pressedKey, 1) = "K" THEN 'Left arrow pressed
             IF dimension = "x" THEN
-                viewportConfig.origin.x = viewportConfig.origin.x + 1
+                viewportConfig.camera.position.x = viewportConfig.camera.position.x + 1
             ELSEIF dimension = "y" THEN
-                viewportConfig.origin.y = viewportConfig.origin.y + 1
+                viewportConfig.camera.position.y = viewportConfig.camera.position.y + 1
             ELSEIF dimension = "z" THEN
-                viewportConfig.origin.z = viewportConfig.origin.z + 1
+                viewportConfig.camera.position.z = viewportConfig.camera.position.z + 1
             END IF
             change = change + 1
         ELSEIF RIGHT$(pressedKey, 1) = "M" THEN 'Right arrow pressed
             IF dimension = "x" THEN
-                viewportConfig.origin.x = viewportConfig.origin.x - 1
+                viewportConfig.camera.position.x = viewportConfig.camera.position.x - 1
             ELSEIF dimension = "y" THEN
-                viewportConfig.origin.y = viewportConfig.origin.y - 1
+                viewportConfig.camera.position.y = viewportConfig.camera.position.y - 1
             ELSEIF dimension = "z" THEN
-                viewportConfig.origin.z = viewportConfig.origin.z - 1
+                viewportConfig.camera.position.z = viewportConfig.camera.position.z - 1
             END IF
             change = change + 1
         ELSEIF RIGHT$(pressedKey, 1) = "H" THEN 'Up arrow pressed
@@ -233,6 +278,12 @@ FUNCTION RunTests ()
         EXIT FUNCTION
     END IF
 
+    result = TestMatrixVectorMult
+    IF result <> 0 THEN
+        RunTests = result
+        EXIT FUNCTION
+    END IF
+
     RunTests = 0
 END FUNCTION
 
@@ -242,9 +293,6 @@ SUB InitCanvas (config AS CanvasConfigType)
 END SUB
 
 SUB Render (spheres() AS SphereType, lights() AS LightType, canvasConfig AS CanvasConfigType, viewportConfig AS ViewportConfigType)
-    DIM cameraOrigin AS ViewportPointType
-    cameraOrigin = viewportConfig.origin
-
     DIM position AS CanvasPointType
     DIM rayDirection AS ViewportPointType
     DIM pixelColor AS _UNSIGNED LONG
@@ -253,7 +301,8 @@ SUB Render (spheres() AS SphereType, lights() AS LightType, canvasConfig AS Canv
         FOR y = -canvasConfig.halfHeight TO canvasConfig.halfHeight
             position.y = y
             CALL CanvasToViewPort(position, rayDirection, canvasConfig, viewportConfig)
-            pixelColor = TraceRay~&(spheres(), lights(), cameraOrigin, rayDirection, 1, MATH_INF#, 3)
+            CALL MatrixVectorMult(viewportConfig.camera.rotation, rayDirection, rayDirection)
+            pixelColor = TraceRay~&(spheres(), lights(), viewportConfig.camera.position, rayDirection, 1, MATH_INF#, 3)
             CALL DrawPixel(position, pixelColor, canvasConfig)
         NEXT y
     NEXT x
@@ -422,6 +471,59 @@ SUB Add3d (vector AS ViewportPointType, pt AS ViewportPointType, resultVector AS
     resultVector.x = vector.x + pt.x
     resultVector.y = vector.y + pt.y
     resultVector.z = vector.z + pt.z
+END SUB
+
+FUNCTION TestMatrixVectorMult ()
+    'Identity matrix, no transformation
+    DIM givenMatrix AS RotationMatrixType
+    givenMatrix.x1 = 1
+    givenMatrix.x2 = 0
+    givenMatrix.x3 = 0
+    givenMatrix.y1 = 0
+    givenMatrix.y2 = 1
+    givenMatrix.y3 = 0
+    givenMatrix.z1 = 0
+    givenMatrix.z2 = 0
+    givenMatrix.z3 = 1
+
+    DIM givenVector AS ViewportPointType
+    givenVector.x = 2
+    givenVector.y = 3
+    givenVector.z = 5
+
+    DIM actualVector AS ViewportPointType
+    CALL MatrixVectorMult(givenMatrix, givenVector, actualVector)
+
+    IF actualVector.x <> givenVector.x THEN
+        PRINT "TestMatrixVectorMult - x was"; actualVector.x; "instead of"; givenVector.x
+        TestMatrixVectorMult = -1
+        EXIT FUNCTION
+    END IF
+
+    IF actualVector.y <> givenVector.y THEN
+        PRINT "TestMatrixVectorMult - y was"; actualVector.y; "instead of"; givenVector.y
+        TestMatrixVectorMult = -1
+        EXIT FUNCTION
+    END IF
+
+    IF actualVector.z <> givenVector.z THEN
+        PRINT "TestMatrixVectorMult - z was"; actualVector.z; "instead of"; givenVector.z
+        TestMatrixVectorMult = -1
+        EXIT FUNCTION
+    END IF
+
+    TestMatrixVectorMult = 0
+END FUNCTION
+
+SUB MatrixVectorMult (matrix AS RotationMatrixType, vector AS ViewportPointType, result AS ViewportPointType)
+    DIM tmpResult AS ViewportPointType
+    tmpResult.x = matrix.x1 * vector.x + matrix.x2 * vector.y + matrix.x3 * vector.z
+    tmpResult.y = matrix.y1 * vector.x + matrix.y2 * vector.y + matrix.y3 * vector.z
+    tmpResult.z = matrix.z1 * vector.x + matrix.z2 * vector.y + matrix.z3 * vector.z
+
+    result.x = tmpResult.x
+    result.y = tmpResult.y
+    result.z = tmpResult.z
 END SUB
 
 SUB ScalarMult3d (vector AS ViewportPointType, scalar AS DOUBLE, resultVector AS ViewportPointType)
